@@ -13,16 +13,31 @@ import * as graphql from "@nestjs/graphql";
 import { GraphQLError } from "graphql";
 import { isRecordNotFoundError } from "../../prisma.util";
 import { MetaQueryPayload } from "../../util/MetaQueryPayload";
+import * as nestAccessControl from "nest-access-control";
+import * as gqlACGuard from "../../auth/gqlAC.guard";
+import { GqlDefaultAuthGuard } from "../../auth/gqlDefaultAuth.guard";
+import * as common from "@nestjs/common";
+import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
 import { Property } from "./Property";
 import { PropertyCountArgs } from "./PropertyCountArgs";
 import { PropertyFindManyArgs } from "./PropertyFindManyArgs";
 import { PropertyFindUniqueArgs } from "./PropertyFindUniqueArgs";
 import { DeletePropertyArgs } from "./DeletePropertyArgs";
 import { PropertyService } from "../property.service";
+@common.UseGuards(GqlDefaultAuthGuard, gqlACGuard.GqlACGuard)
 @graphql.Resolver(() => Property)
 export class PropertyResolverBase {
-  constructor(protected readonly service: PropertyService) {}
+  constructor(
+    protected readonly service: PropertyService,
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+  ) {}
 
+  @graphql.Query(() => MetaQueryPayload)
+  @nestAccessControl.UseRoles({
+    resource: "Property",
+    action: "read",
+    possession: "any",
+  })
   async _propertiesMeta(
     @graphql.Args() args: PropertyCountArgs
   ): Promise<MetaQueryPayload> {
@@ -32,14 +47,26 @@ export class PropertyResolverBase {
     };
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => [Property])
+  @nestAccessControl.UseRoles({
+    resource: "Property",
+    action: "read",
+    possession: "any",
+  })
   async properties(
     @graphql.Args() args: PropertyFindManyArgs
   ): Promise<Property[]> {
     return this.service.properties(args);
   }
 
+  @common.UseInterceptors(AclFilterResponseInterceptor)
   @graphql.Query(() => Property, { nullable: true })
+  @nestAccessControl.UseRoles({
+    resource: "Property",
+    action: "read",
+    possession: "own",
+  })
   async property(
     @graphql.Args() args: PropertyFindUniqueArgs
   ): Promise<Property | null> {
@@ -51,6 +78,11 @@ export class PropertyResolverBase {
   }
 
   @graphql.Mutation(() => Property)
+  @nestAccessControl.UseRoles({
+    resource: "Property",
+    action: "delete",
+    possession: "any",
+  })
   async deleteProperty(
     @graphql.Args() args: DeletePropertyArgs
   ): Promise<Property | null> {
